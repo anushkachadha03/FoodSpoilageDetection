@@ -1,0 +1,186 @@
+#define S0 D0
+
+#define S1 D1
+
+#define S2 D2
+
+#define S3 D3
+
+#define analogpin A0
+
+#include <ESP8266WiFi.h>
+#include<DHT.h>
+ 
+String apiKey = "***";     //  Enter your Write API key from ThingSpeak
+
+const char *ssid =  "***";     // replace with your wifi ssid and wpa2 key
+const char *pass =  "***";
+const char* server = "api.thingspeak.com";
+
+WiFiClient client;
+float R1;
+#define DHTPIN 2          //pin where the dht11 is connected D4 pin
+ 
+DHT dht(DHTPIN, DHT11);
+ 
+float R0;
+
+void setup() {
+
+pinMode(analogpin, INPUT);
+
+pinMode(S0,OUTPUT);
+
+pinMode(S1,OUTPUT);
+
+pinMode(S2,OUTPUT);
+
+pinMode(S3,OUTPUT);
+
+// put your setup code here, to run once:
+Serial.begin(115200);
+       delay(10);
+       dht.begin();
+       Serial.println("Connecting to ");
+       Serial.println(ssid);
+       WiFi.begin(ssid, pass);
+       while (WiFi.status() != WL_CONNECTED)
+     {
+            delay(10);
+     }
+      Serial.println("");
+      float sensor_volt1; //Define variable for sensor voltage
+      float RS_air; //Define variable for sensor resistance
+      float sensorValue1=0; //Define variable for analog readings
+      // Calibration of sensors
+      for (int x = 0 ; x < 500 ; x++) //Start for loop
+      {
+        sensorValue1 = sensorValue1 + analogRead(A0); //Add analog values of sensor 500 times
+      }
+      sensorValue1 = sensorValue1 / 500.0; //Take average of readings
+      sensor_volt1 = sensorValue1 * (5.0 / 1023.0); //Convert average to voltage
+      RS_air = ((5.0 * 10.0) / sensor_volt1) - 10.0; //Calculate RS in fresh air
+      R0 = RS_air / 1.91; //Calculate R0
+      Serial.print("R0 = "); //Display "R0"
+      Serial.println(R0); //Display value of R0
+ 
+      float sensor_volt3; //Define variable for sensor voltage
+      float RS_air1; //Define variable for sensor resistance
+      float sensorValue2=0; //Define variable for analog readings
+      for (int y = 0 ; y < 500 ; y++) //Start for loop
+      {
+        sensorValue2 = sensorValue2 + analogRead(A0); //Add analog values of sensor 500 times
+      }
+      sensorValue2 = sensorValue2 / 500.0; //Take average of readings
+      sensor_volt3 = sensorValue2 * (5.0 / 1023.0); //Convert average to voltage
+      RS_air1 = ((5.0 * 10.0) / sensor_volt3) - 10.0; //Calculate RS in fresh air
+      R1 = RS_air1 / 1.00; //Calculate R1
+      Serial.print("R1 = "); //Display "R1"
+      Serial.println(R1); //Display value of R1
+      delay(1000); //Wait 1 second
+
+}
+
+void loop() {
+      float h = dht.readHumidity();
+      float t = dht.readTemperature();
+     
+              if (isnan(h) || isnan(t))
+                 {
+                     Serial.println("Failed to read from DHT sensor!");
+                      return;
+                 }
+
+
+
+
+
+digitalWrite(S0,LOW);
+
+
+
+digitalWrite(S1,LOW);
+
+
+
+digitalWrite(S2,LOW);
+
+
+
+digitalWrite(S3,LOW);
+
+
+
+Serial.print("Sensor 1 ");Serial.println(analogRead(analogpin));
+
+delay(1000);
+
+float sensor_volt4; //Define variable for sensor voltage
+      float RS_gas2; //Define variable for sensor resistance
+      float ratio1; //Define variable for ratio
+      float sensorValue3 = analogRead(A0); //Read analog values of sensor
+      sensor_volt4 = sensorValue3*(5.0/1023.0); //Convert analog values to voltage
+      RS_gas2 = ((5.0*10.0)/sensor_volt4)-10.0; //Get value of RS in a gas
+      ratio1 = RS_gas2/R1;  // Get ratio RS_gas2/RS_air1(R1)
+      double ppm1_log = (log10(ratio1)-0.716)/-0.358; //Get ppm value in linear scale according to the the ratio value
+      float ppm1 = pow(10, ppm1_log); //Convert ppm value to log scale
+digitalWrite(S0,HIGH);
+
+digitalWrite(S1,LOW);
+
+digitalWrite(S2,LOW);
+
+digitalWrite(S3,LOW);
+
+Serial.print("Sensor 2 ");Serial.println(analogRead(analogpin));
+
+      float sensor_volt; //Define variable for sensor voltage
+      float RS_gas; //Define variable for sensor resistance
+      float ratio; //Define variable for ratio
+      float sensorValue = analogRead(A0); //Read analog values of sensor
+      sensor_volt = sensorValue*(5.0/1023.0); //Convert analog values to voltage
+      RS_gas = ((5.0*10.0)/sensor_volt)-10.0; //Get value of RS in a gas
+      ratio = RS_gas/R0;  // Get ratio RS_gas/RS_air(r0)
+      double ppm_log = (log10(ratio)-1.40)/-0.3875; //Get ppm value in linear scale according to the the ratio value
+      float ppm = pow(10, ppm_log); //Convert ppm value to log scale
+		      // pushing data to ThingSpeak
+                      if (client.connect(server,80))  
+                      {  
+                             String postStr = apiKey;
+                             postStr +="&field1=";
+                             postStr += String(t);
+                             postStr +="&field2=";
+                             postStr += String(h);
+                             postStr +="&field3=";
+                             postStr += String(ppm);
+                             postStr +="&field4=";
+                             postStr += String(ppm1);
+                             postStr += "\r\n\r\n";
+ 
+                             client.print("POST /update HTTP/1.1\n");
+                             client.print("Host: api.thingspeak.com\n");
+                             client.print("Connection: close\n");
+                             client.print("X-THINGSPEAKAPIKEY: "+apiKey+"\n");
+                             client.print("Content-Type: application/x-www-form-urlencoded\n");
+                             client.print("Content-Length: ");
+                             client.print(postStr.length());
+                             client.print("\n\n");
+                             client.print(postStr);
+
+                 Serial.print("Temperature: ");
+                             Serial.print(t);
+                             Serial.print(" degrees Celcius, Humidity: ");
+                             Serial.print(h);
+                             Serial.println("%. Send to Thingspeak.");
+                             Serial.print("PPM");
+                             Serial.print(ppm);
+                             Serial.println(" PPM.Send to Thingspeak.");
+                             Serial.print("PPM1");
+                             Serial.print(ppm1);
+                             Serial.println(" PPM1.Send to Thingspeak.");
+                        }
+          client.stop();
+          Serial.println("Waiting...");
+    delay(1000);
+
+}
